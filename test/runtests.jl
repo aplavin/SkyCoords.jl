@@ -9,6 +9,7 @@ using NearestNeighbors
 using Random: randperm
 using SkyCoords
 using StableRNGs
+using StaticArrays: SVector
 using Statistics
 using Test
 import Makie
@@ -131,6 +132,36 @@ end
     @test 59.9 < lat(c2) |> rad2deg < 60.0
 end
 
+@testset "Tangent-plane offset ($T)" for T in [ICRSCoords, GalCoords, FK5Coords{2000}, EclipticCoords{2000}]
+    # expected: inverse gnomonic projection evaluated in BigFloat
+    @testset for (c, Δ, expected) in [
+        (T(1.0, 0.5), SVector(1e-5, -2e-5), (1.0000113948147724, 0.4999799999726888)),
+        (T(2.0, π / 2 - 1e-4), SVector(3e-5, 4e-5), (2.463647608778249, 1.5707292447555754)),
+        (T(2π - 1e-6, -0.3), SVector(5e-6, 1e-6), (4.233756388267361e-6, -0.2999989999961333)),
+        (T(0.3, -1.2), SVector(0.2, 0.1), (0.7136842785817612, -1.0638156992039631)),
+        (T(4.0, 1.4), SVector(-0.5, 0.3), (2.18296841532279, 1.1092112519083541)),
+        (T(3.0, π / 2 - 1e-7), SVector(1e-6, 0), (4.4711276741853, 1.5707953218073345)),
+        (T(5.0, -π / 2), SVector(-1e-8, 2e-8), (4.536352392223841, -1.5707963044342168)),
+    ]
+        c2 = @inferred offset(c, Δ)
+        @test c2 isa typeof(c)
+        @test c2 ≈ T(expected...) atol = 2.0e-15 rtol = 0
+    end
+
+    @testset for λ in [0, 3, 2π - 1e-9], ϕ in [-π / 2, -π / 2 + 1e-7, -π / 2 + 1e-3, -1, 0, 0.7, π / 2 - 1e-3, π / 2 - 1e-7, π / 2], Δ in [SVector(1e-6, 0), SVector(0, -2e-6), SVector(3e-6, 4e-6), SVector(-1e-8, 2e-8)]
+        c = T(λ, ϕ)
+        c2 = offset(c, Δ)
+        sep, pa = offset(c, c2)
+        @test sep .* SVector(sincos(pa)...) ≈ Δ atol = 1e-15
+        # small offsets: tangent plane and sphere agree to O(|Δ|³);
+        # offset(c, sep, pa) itself loses precision closer to the poles
+        abs(ϕ) < π / 2 - 1e-4 && @test separation(c2, offset(c, hypot(Δ...), atan(Δ...))) ≈ 0 atol = 1e-12
+    end
+
+    @test offset(T(1, 0.5), SVector(0, 0)) ≈ T(1, 0.5) atol = 1e-15
+    @test offset(T(1, -π / 2), SVector(0, 0)) ≈ T(1, -π / 2) atol = 1e-15
+end
+
 @testset "cartesian" begin
     for CT in [ICRSCoords, FK5Coords{2000}, FK5Coords{1975}, EclipticCoords{2000}, EclipticCoords{1975}, GalCoords]
         @test cartesian(CT(0, 0)) |> vec ≈ [1, 0, 0]
@@ -213,6 +244,8 @@ VERSION > v"1.9-DEV" && @testset "Unitful" begin
     @test offset(ICRSCoords(1, 0.5), 0.1u"rad", 2u"rad") === offset(ICRSCoords(1, 0.5), 0.1, 2)
     @test offset(ICRSCoords(1, 0.5), 0.1, 100u"°") === offset(ICRSCoords(1, 0.5), 0.1, deg2rad(100))
     @test offset(ICRSCoords(1, 0.5), 0.1u"°", 100u"°") === offset(ICRSCoords(1, 0.5), deg2rad(0.1), deg2rad(100))
+    @test offset(ICRSCoords(1, 0.5), SVector(1.0u"μrad", -2.0u"μrad")) === offset(ICRSCoords(1, 0.5), SVector(1e-6, -2e-6))
+    @test offset(ICRSCoords(1, 0.5), SVector(0.1u"°", 0.2u"°")) === offset(ICRSCoords(1, 0.5), SVector(deg2rad(0.1), deg2rad(0.2)))
 end
 
 VERSION > v"1.9-DEV" && @testset "DynamicQuantities" begin
@@ -239,6 +272,7 @@ VERSION > v"1.9-DEV" && @testset "DynamicQuantities" begin
     @test offset(ICRSCoords(1, 0.5), 0.1us"rad", 2us"rad") === offset(ICRSCoords(1, 0.5), 0.1, 2)
     @test offset(ICRSCoords(1, 0.5), 0.1, 100us"deg") === offset(ICRSCoords(1, 0.5), 0.1, deg2rad(100))
     @test offset(ICRSCoords(1, 0.5), 0.1us"deg", 100us"deg") === offset(ICRSCoords(1, 0.5), deg2rad(0.1), deg2rad(100))
+    @test offset(ICRSCoords(1, 0.5), SVector(0.1us"deg", 0.2us"deg")) === offset(ICRSCoords(1, 0.5), SVector(deg2rad(0.1), deg2rad(0.2)))
 end
 
 @testset "equality" begin

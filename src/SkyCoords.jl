@@ -271,6 +271,22 @@ julia> offset(c1, c2) .|> rad2deg
 """
 offset(c1::AbstractSkyCoords, c2::AbstractSkyCoords) = separation(c1, c2), position_angle(c1, c2)
 
+"""
+    offset(::AbstractSkyCoords, Δ::SVector{2}) -> coordinate
+
+Offset a coordinate by `Δ = (east, north)`, in radians or as angle quantities, in the plane tangent to the sky at that coordinate.
+This is the exact inverse gnomonic (TAN) projection; for small offsets, `east ≈ Δlon * cos(lat)` and `north ≈ Δlat`.
+Returns a sky coordinate of the same type as input.
+"""
+function offset(c::T, Δ::SVector{2}) where {T <: AbstractSkyCoords}
+    sinλ, cosλ = sincos(lon(c))
+    sinϕ, cosϕ = sincos(lat(c))
+    east = SVector(-sinλ, cosλ, zero(cosλ))
+    north = SVector(-sinϕ * cosλ, -sinϕ * sinλ, cosϕ)
+    # cart2coords doesn't need a unit vector
+    return T(cart2coords(coords2cart(c) + Δ[1] * east + Δ[2] * north)...)
+end
+
 #= use the cosine rule in spherical geometry with three points, the north pole, the starting point,
 and the final point.
 angles: (change in lon), (position angle), (-1/position angle)

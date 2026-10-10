@@ -2,6 +2,7 @@ module DynamicQuantitiesExt
 
 using DynamicQuantities
 using SkyCoords
+using StaticArrays: SVector
 
 _COORDTYPES_LATLON = Union{ICRSCoords, GalCoords, FK5Coords, EclipticCoords}
 
@@ -22,5 +23,6 @@ SkyCoords.position_angle(u::UnionAbstractQuantity, c1, c2) = SkyCoords.position_
 SkyCoords.offset(c::AbstractSkyCoords, sep::UnionAbstractQuantity, pa) = SkyCoords.offset(c, ustrip(u"rad", sep), pa)
 SkyCoords.offset(c::AbstractSkyCoords, sep, pa::UnionAbstractQuantity) = SkyCoords.offset(c, sep, ustrip(u"rad", pa))
 SkyCoords.offset(c::AbstractSkyCoords, sep::UnionAbstractQuantity, pa::UnionAbstractQuantity) = SkyCoords.offset(c, ustrip(u"rad", sep), ustrip(u"rad", pa))
+SkyCoords.offset(c::AbstractSkyCoords, Δ::SVector{2, <:UnionAbstractQuantity}) = SkyCoords.offset(c, ustrip.(u"rad", Δ))
 
 end
